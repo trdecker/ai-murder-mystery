@@ -1,0 +1,27 @@
+{
+  "name": "ai-murder-mystery",
+  "version": "1.0.0",
+  "main": "Claude.js",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.95.1",
+    "chalk": "^5.6.2",
+    "dotenv": "^17.4.2",
+    "undici-types": "^7.19.2"
+  },
+  "type": "module",
+  "scripts": {
+    "start": "node src/Main.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/trdecker/ai-murder-mystery.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/trdecker/ai-murder-mystery/issues"
+  },
+  "homepage": "https://github.com/trdecker/ai-murder-mystery#readme",
+  "description": ""
+}
