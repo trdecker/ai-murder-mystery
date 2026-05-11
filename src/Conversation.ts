@@ -1,5 +1,6 @@
 import * as readline from "readline";
 import OllamaAPI, { type OllamaMessage } from "./Ollama.js";
+import { loadFile } from "./utils.js";
 
 // Character definitions
 interface Character {
@@ -59,10 +60,17 @@ class CharacterConversation {
   private character: Character;
   private conversationHistory: OllamaMessage[];
   private ollama: OllamaAPI;
+  private systemPrompt: string;
+  private player: string;
 
   constructor(character: Character) {
+    // Initialize fields
     this.character = character;
     this.conversationHistory = [];
+    this.systemPrompt = loadFile("AI_Instructions.txt");
+    this.player = loadFile("Ricardo_Rivera.txt");
+
+    // Start ollama
     try {
       this.ollama = new OllamaAPI();
     } catch (error) {
@@ -79,9 +87,7 @@ class CharacterConversation {
   async start(): Promise<void> {
     console.log(`\nStarting conversation with ${this.character.name}...`);
 
-    // Set up character system prompt
-    const systemPrompt = `You are ${this.character.name}, a ${this.character.age}-year-old ${this.character.occupation} in the small town of Tokeland, Washington. A murder has occurred at the local pub (Fishy Fjord) and you are being questioned by detective Ricardo Rivera. Stay in character and respond naturally to questions. You may be innocent or guilty - respond as the character would.`;
-
+    // Initialize readline
     let rl: readline.Interface;
     try {
       rl = readline.createInterface({
@@ -98,9 +104,19 @@ class CharacterConversation {
       );
     }
 
-    console.log(
-      `\n${this.character.name}: Hello, detective. I heard you wanted to speak with me about what happened at the pub.`,
+    // Initialize chat with context
+    const response = await this.ollama.sendConversation(
+      this.conversationHistory,
+      this.systemPrompt +
+        " For this first message, please respond as if I, the detective, have just walked up and greeted you.",
     );
+    // Add assistant response to conversation history
+    this.conversationHistory.push({
+      role: "assistant",
+      content: response,
+    });
+    // Display response
+    console.log(`\n${this.character.name}: ${response}`);
 
     const askQuestion = (): void => {
       rl.question("\nYou: ", (userInput: string) => {
@@ -114,7 +130,7 @@ class CharacterConversation {
         }
 
         // Handle async operation in a separate function
-        this.handleUserInput(userInput, systemPrompt, rl, askQuestion);
+        this.handleUserInput(userInput, rl, askQuestion);
       });
     };
 
@@ -123,7 +139,6 @@ class CharacterConversation {
 
   private async handleUserInput(
     userInput: string,
-    systemPrompt: string,
     rl: readline.Interface,
     askQuestion: () => void,
   ): Promise<void> {
@@ -134,7 +149,7 @@ class CharacterConversation {
       // Get response from Ollama
       const response = await this.ollama.sendConversation(
         this.conversationHistory,
-        systemPrompt,
+        this.systemPrompt,
       );
 
       // Add assistant response to conversation history
