@@ -1,0 +1,26 @@
+[
+  {
+    "name": "Gerald Gotmann",
+    "description": "66, male. Fisherman.",
+    "value": "A",
+    "file": "/suspects/Gerald_Gottman.txt"
+  },
+  {
+    "name": "Vivian Voss",
+    "description": "43, female. Pub owner and bar server.",
+    "value": "B",
+    "file": "/suspects/Vivian_Voss.txt"
+  },
+  {
+    "name": "Peter Poulson",
+    "description": "51, male. Pastor.",
+    "value": "C",
+    "file": "/suspects/Peter_Poulson.txt"
+  },
+  {
+    "name": "Fiona Fitzgerald",
+    "description": "66, male. Writer.",
+    "value": "D",
+    "file": "/suspects/Fiona_Fitzgerald.txt"
+  }
+]

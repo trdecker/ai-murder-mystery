@@ -38,7 +38,9 @@ const characters: Record<CharacterKey, Character> = {
 };
 
 // Main conversation function
-export async function startConversation(characterKey: CharacterKey): Promise<void> {
+export async function startConversation(
+  characterKey: CharacterKey,
+): Promise<void> {
   const character = characters[characterKey];
   if (!character) {
     throw new Error(
@@ -64,7 +66,10 @@ class CharacterConversation {
     try {
       this.ollama = new OllamaAPI();
     } catch (error) {
-      console.error("Failed to initialize Ollama API:", (error as Error).message);
+      console.error(
+        "Failed to initialize Ollama API:",
+        (error as Error).message,
+      );
       throw new Error(
         "Could not connect to Ollama service. Please ensure Ollama is running.",
       );
@@ -84,7 +89,10 @@ class CharacterConversation {
         output: process.stdout,
       });
     } catch (error) {
-      console.error("Failed to create readline interface:", (error as Error).message);
+      console.error(
+        "Failed to create readline interface:",
+        (error as Error).message,
+      );
       throw new Error(
         "Could not initialize interactive input. This may not work in non-interactive environments.",
       );
@@ -117,7 +125,7 @@ class CharacterConversation {
     userInput: string,
     systemPrompt: string,
     rl: readline.Interface,
-    askQuestion: () => void
+    askQuestion: () => void,
   ): Promise<void> {
     try {
       // Add user message to conversation history

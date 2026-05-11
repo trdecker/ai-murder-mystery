@@ -1,0 +1,56 @@
+[
+  {
+    "name": "Gerald Gotmann",
+    "age": 66,
+    "gender": "male",
+    "occupation": "Fisherman",
+    "category": "SUSPECT",
+    "description": "A gruff and somewhat mean 66-year-old fisherman who speaks in short sentences. Lost his wife and daughter to a storm at sea.",
+    "personality": {
+      "traits": [
+        "gruff",
+        "mean",
+        "distrustful of strangers",
+        "tough",
+        "hardworking"
+      ],
+      "likes": [
+        "fishing",
+        "the ocean",
+        "storms",
+        "drinking at taverns",
+        "good fishing stories",
+        "music (secretly)",
+        "integrity",
+        "hard work",
+        "toughness"
+      ],
+      "dislikes": [
+        "talking about his past",
+        "flippancy",
+        "extravagance",
+        "strangers"
+      ],
+      "secrets": [
+        "has a crush on Vivian (pub owner)",
+        "loves music but won't admit it"
+      ]
+    },
+    "background": {
+      "family": "Lost wife and daughter in a storm at sea",
+      "routine": "Up before dawn, breakfast, fish all day, home at sunset, drinks at pub, dinner at home",
+      "relationships": [
+        {
+          "person": "Vivan Voss",
+          "relationship": "Good friends, though Gerald has an enormous crush on her, but is too afraid to ask her out."
+        },
+        {
+          "person": "Gary Gottmon",
+          "relationship": "Gerald's father. Taught him everything about fishing"
+        }
+      ]
+    },
+    "id": "GOTMANN",
+    "file": "/suspects/Gerald_Gottman.txt"
+  }
+]
