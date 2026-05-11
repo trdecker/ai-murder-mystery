@@ -26,6 +26,11 @@ interface OllamaGenerateResponse {
   eval_duration?: number;
 }
 
+interface CustomOllamaResponse {
+  response: string;
+  prompts: string[];
+}
+
 class OllamaAPI {
   private baseUrl: string;
   private model: string;
@@ -35,11 +40,14 @@ class OllamaAPI {
     this.model = process.env.OLLAMA_MODEL || "llama2";
   }
 
-  async sendMessage(message: string, systemPrompt?: string): Promise<string> {
+  async sendMessage(message: string, systemPrompt?: string): Promise<CustomOllamaResponse> {
     try {
       let prompt = message;
+      const prompts: string[] = [message];
+
       if (systemPrompt) {
         prompt = `${systemPrompt}\n\nUser: ${message}`;
+        prompts.unshift(systemPrompt);
       }
 
       const response = await fetch(`${this.baseUrl}/api/generate`, {
@@ -61,7 +69,10 @@ class OllamaAPI {
       }
 
       const data: OllamaGenerateResponse = await response.json();
-      return data.response;
+      return {
+        response: data.response,
+        prompts: prompts
+      };
     } catch (error) {
       console.error(
         "Error sending message to Ollama:",
@@ -74,21 +85,25 @@ class OllamaAPI {
   async sendConversation(
     messages: OllamaMessage[],
     systemPrompt?: string,
-  ): Promise<string> {
+  ): Promise<CustomOllamaResponse> {
     try {
       // Convert messages to a single prompt format for Ollama
       let prompt = "";
+      const prompts: string[] = [];
 
       if (systemPrompt) {
         prompt += `${systemPrompt}\n\n`;
+        prompts.push(systemPrompt);
       }
 
       // Convert conversation format to text
       messages.forEach((msg) => {
         if (msg.role === "user") {
           prompt += `User: ${msg.content}\n`;
+          prompts.push(`User: ${msg.content}`);
         } else if (msg.role === "assistant") {
           prompt += `Assistant: ${msg.content}\n`;
+          prompts.push(`Assistant: ${msg.content}`);
         }
       });
 
@@ -111,7 +126,10 @@ class OllamaAPI {
       }
 
       const data: OllamaGenerateResponse = await response.json();
-      return data.response;
+      return {
+        response: data.response,
+        prompts: prompts
+      };
     } catch (error) {
       console.error(
         "Error sending conversation to Ollama:",
@@ -123,4 +141,4 @@ class OllamaAPI {
 }
 
 export default OllamaAPI;
-export type { OllamaMessage };
+export type { OllamaMessage, CustomOllamaResponse };

@@ -1,14 +1,6 @@
-import inquirer from "inquirer";
-import { startConversation } from "./Conversation.js";
-import type { CharacterKey } from "./Conversation.js";
+import { GameEngine } from "./core/GameEngine.js";
 
-interface SuspectChoice {
-  name: string;
-  description: string;
-  value: CharacterKey;
-}
-
-async function runInteractivePrompt(): Promise<void> {
+async function runGame(): Promise<void> {
   console.clear();
   console.log("🕵️  AI MURDER MYSTERY\n");
 
@@ -20,43 +12,24 @@ async function runInteractivePrompt(): Promise<void> {
     "You are the world renowned detective Ricardo Rivera. You must find the murderer!\n",
   );
 
-  const suspects: SuspectChoice[] = [
-    {
-      name: "Gerald Gotmann",
-      description: "66, male. Fisherman.",
-      value: "A",
-    },
-    {
-      name: "Vivian Voss",
-      description: "43, female. Pub owner and bar server.",
-      value: "B",
-    },
-    {
-      name: "Peter Poulson",
-      description: "51, male. Pastor.",
-      value: "C",
-    },
-    {
-      name: "Fiona Fitzgerald",
-      description: "66, male. Writer.",
-      value: "D",
-    },
-  ];
+  // Check for --dev flag in command line arguments
+  const isDebug = process.argv.includes("--dev");
 
-  const answer = await inquirer.prompt([
-    {
-      type: "select",
-      name: "suspect",
-      message: "🔍 Choose a suspect to interrogate:",
-      choices: suspects.map((suspect) => ({
-        name: `${suspect.name} - ${suspect.description}`,
-        value: suspect.value,
-      })),
-      pageSize: 4,
-    },
-  ]);
+  // Initialize and start the game engine
+  const gameEngine = new GameEngine({
+    isDebug,
+  });
 
-  await startConversation(answer.suspect);
+  try {
+    await gameEngine.initialize();
+    await gameEngine.showMainMenu();
+  } catch (error) {
+    console.error("❌ Failed to start game:", error);
+    process.exit(1);
+  }
 }
 
-runInteractivePrompt();
+runGame().catch((error) => {
+  console.error("💥 Unexpected error:", error);
+  process.exit(1);
+});

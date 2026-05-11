@@ -13,7 +13,7 @@
   "type": "module",
   "scripts": {
     "build": "tsc",
-    "dev": "tsx src/Main.ts",
+    "dev": "tsx src/Main.ts --dev",
     "start": "npm run build && node dist/Main.js",
     "type-check": "tsc --noEmit"
   },
