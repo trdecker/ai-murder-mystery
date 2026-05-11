@@ -8,7 +8,7 @@ interface Character {
   occupation: string;
 }
 
-type CharacterKey = "A" | "B" | "C" | "D";
+export type CharacterKey = "A" | "B" | "C" | "D";
 
 const characters: Record<CharacterKey, Character> = {
   A: {

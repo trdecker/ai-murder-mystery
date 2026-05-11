@@ -1,14 +1,16 @@
-import * as readline from "readline";
+import inquirer from "inquirer";
 import { startConversation } from "./Conversation.js";
+import type { CharacterKey } from "./Conversation.js";
 
-function runInteractivePrompt(): void {
-  const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout,
-  });
+interface SuspectChoice {
+  name: string;
+  description: string;
+  value: CharacterKey;
+}
 
+async function runInteractivePrompt(): Promise<void> {
   console.clear();
-  console.log("AI MURDER MYSTERY\n");
+  console.log("🕵️  AI MURDER MYSTERY\n");
 
   console.log(
     "In the sleepy town of Tokeland, Washington, wealthy hotel owner Don Dahlgren was found dead in the FISHY FJORD, the local pub.\n",
@@ -18,31 +20,43 @@ function runInteractivePrompt(): void {
     "You are the world renowned detective Ricardo Rivera. You must find the murderer!\n",
   );
 
-  console.log("### SUSPECTS ###\n");
+  const suspects: SuspectChoice[] = [
+    {
+      name: "Gerald Gotmann",
+      description: "66, male. Fisherman.",
+      value: "A",
+    },
+    {
+      name: "Vivian Voss",
+      description: "43, female. Pub owner and bar server.",
+      value: "B",
+    },
+    {
+      name: "Peter Poulson",
+      description: "51, male. Pastor.",
+      value: "C",
+    },
+    {
+      name: "Fiona Fitzgerald",
+      description: "66, male. Writer.",
+      value: "D",
+    },
+  ];
 
-  console.log("Gerald Gotmann: 66, male. Fisherman.");
-  console.log("Vivian Voss: 43, female. Pub owner and bar server.");
-  console.log("Peter Poulson: 51, male. Pastor.");
-  console.log("Fiona Fitzgerald: 66, male. Writer.\n");
+  const answer = await inquirer.prompt([
+    {
+      type: "select",
+      name: "suspect",
+      message: "🔍 Choose a suspect to interrogate:",
+      choices: suspects.map((suspect) => ({
+        name: `${suspect.name} - ${suspect.description}`,
+        value: suspect.value,
+      })),
+      pageSize: 4,
+    },
+  ]);
 
-  console.log("CHOOSE A SUSPECT TO INTERROGATE:\n");
-
-  console.log("A) Gerald");
-  console.log("B) Vivian");
-  console.log("C) Peter");
-  console.log("D) Fiona");
-
-  rl.question("", async (answer: string) => {
-    const choice = answer.toUpperCase().trim() as "A" | "B" | "C" | "D";
-
-    if (["A", "B", "C", "D"].includes(choice)) {
-      await startConversation(choice);
-    } else {
-      console.log("Invalid selection. Please choose A, B, C, or D.");
-    }
-
-    rl.close();
-  });
+  await startConversation(answer.suspect);
 }
 
 runInteractivePrompt();
