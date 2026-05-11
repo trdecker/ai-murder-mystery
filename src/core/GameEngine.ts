@@ -1,9 +1,9 @@
 import { Character } from "../types.js";
-import { gameState } from "./GameState.js";
 import { CharacterConversation } from "../Conversation.js";
 import OllamaAPI from "../ai/Ollama.js";
 import * as readline from "readline";
 import { logger } from "../Logger.js";
+import { select } from "@inquirer/prompts";
 
 export interface GameConfig {
   isDebug?: boolean;
@@ -12,17 +12,12 @@ export interface GameConfig {
 export class GameEngine {
   private characters: Character[] = [];
   private currentConversation?: CharacterConversation;
-  private rl: readline.Interface;
   private ollamaApi: OllamaAPI;
   private gameLoop?: NodeJS.Timeout;
   public isDebug?: boolean;
 
   // Initialize readline interface, ollamaAPI, isDebug
   constructor({ isDebug = false }: GameConfig) {
-    this.rl = readline.createInterface({
-      input: process.stdin,
-      output: process.stdout,
-    });
     this.ollamaApi = new OllamaAPI();
     this.isDebug = isDebug;
   }
@@ -47,51 +42,44 @@ export class GameEngine {
   }
 
   async showMainMenu(): Promise<void> {
-    console.clear();
-    const numCharacters = this.characters.length;
-    this.characters.forEach((character, i) => {
-      console.log(`${i + 1}) Interrogate ${character.name}`);
+    // Create menu choices - using string values for proper typing
+    const choices = this.characters.map((character, index) => ({
+      name: `🕵️ Interrogate ${character.name}`,
+      value: `character_${index}`,
+    }));
+
+    choices.push({
+      name: "❌ Quit Game",
+      value: "quit",
     });
-    console.log(`${numCharacters + 1}) Quit`);
 
-    const choice = await this.getUserChoice(
-      `Choose an action: 1-${numCharacters + 1}): `,
-    );
+    const action = await select({
+      message: "What would you like to do?",
+      choices,
+    });
 
-    // Quit if that decision was chosen
-    if (choice === (numCharacters + 1).toString()) {
+    if (action === "quit") {
       this.quit();
       return;
     }
 
-    // Select character
-    const index = parseInt(choice) - 1;
+    // Extract character index and get character
+    const characterIndex = parseInt(action.replace("character_", ""));
+    const character = this.characters[characterIndex];
 
-    if (index >= 0 && index < this.characters.length) {
-      const character = this.characters[index];
+    this.currentConversation = new CharacterConversation(character);
 
-      this.currentConversation = new CharacterConversation(character, this.rl);
+    // Begin the conversation!
+    await this.currentConversation.start();
 
-      // Begin the conversation!
-      await this.currentConversation.start();
-    } else {
-      this.showMainMenu();
-    }
-  }
-
-  private async getUserChoice(prompt: string): Promise<string> {
-    return new Promise((resolve) => {
-      this.rl.question(prompt, (answer) => {
-        resolve(answer.trim());
-      });
-    });
+    // Return to main menu after conversation ends
+    await this.showMainMenu();
   }
 
   quit(): void {
     if (this.gameLoop) {
       clearInterval(this.gameLoop);
     }
-    this.rl.close();
     console.log("\nThanks for playing! 🕵️");
     process.exit(0);
   }

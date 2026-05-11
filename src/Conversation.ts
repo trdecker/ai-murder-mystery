@@ -1,5 +1,8 @@
 import * as readline from "readline";
-import OllamaAPI, { type OllamaMessage, type CustomOllamaResponse } from "./ai/Ollama.js";
+import OllamaAPI, {
+  type OllamaMessage,
+  type CustomOllamaResponse,
+} from "./ai/Ollama.js";
 import { loadFile } from "./utils.js";
 import { Character } from "./types.js";
 
@@ -11,9 +14,8 @@ export class CharacterConversation {
   private ollama: OllamaAPI;
   private systemPrompt: string;
   private playerPrompt: string;
-  private rl: readline.Interface;
 
-  constructor(character: Character, rl: readline.Interface) {
+  constructor(character: Character) {
     // Initialize fields
     this.character = character;
     const characterPrompt = loadFile(character.file);
@@ -21,7 +23,6 @@ export class CharacterConversation {
     this.conversationHistory = [];
     this.systemPrompt = loadFile("AI_Instructions.txt");
     this.playerPrompt = loadFile("Ricardo_Rivera.txt");
-    this.rl = rl;
 
     // Start ollama
     try {
@@ -47,9 +48,6 @@ export class CharacterConversation {
       "\n\n" +
       this.playerPrompt;
 
-    // console.log("###### " + conversationPrompt);
-    console.log("history:", this.conversationHistory);
-
     // Initialize chat with context
     const result = await this.ollama.sendConversation(
       this.conversationHistory,
@@ -65,18 +63,17 @@ export class CharacterConversation {
     console.log(`\n${this.character.name}: ${result.response}`);
 
     const askQuestion = (): void => {
-      this.rl.question("\nYou: ", (userInput: string) => {
-        if (
-          userInput.toLowerCase() === "quit" ||
-          userInput.toLowerCase() === "exit"
-        ) {
-          console.log(`\n${this.character.name}: Goodbye, detective.`);
-          return;
-        }
-
-        // Handle async operation in a separate function
-        this.handleUserInput(userInput, askQuestion);
-      });
+      // this.rl.question("\nYou: ", (userInput: string) => {
+      //   if (
+      //     userInput.toLowerCase() === "quit" ||
+      //     userInput.toLowerCase() === "exit"
+      //   ) {
+      //     console.log(`\n${this.character.name}: Goodbye, detective.`);
+      //     return;
+      //   }
+      //   // Handle async operation in a separate function
+      //   this.handleUserInput(userInput, askQuestion);
+      // });
     };
 
     askQuestion();
