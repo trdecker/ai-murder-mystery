@@ -1,7 +1,7 @@
 {
   "name": "ai-murder-mystery",
   "version": "1.0.0",
-  "main": "Claude.js",
+  "main": "dist/Main.js",
   "dependencies": {
     "@anthropic-ai/sdk": "^0.95.1",
     "chalk": "^5.6.2",
@@ -10,7 +10,10 @@
   },
   "type": "module",
   "scripts": {
-    "start": "node src/Main.js"
+    "build": "tsc",
+    "dev": "tsx src/Main.ts",
+    "start": "npm run build && node dist/Main.js",
+    "type-check": "tsc --noEmit"
   },
   "repository": {
     "type": "git",
@@ -23,5 +26,10 @@
     "url": "https://github.com/trdecker/ai-murder-mystery/issues"
   },
   "homepage": "https://github.com/trdecker/ai-murder-mystery#readme",
-  "description": ""
+  "description": "",
+  "devDependencies": {
+    "@types/node": "^25.6.2",
+    "tsx": "^4.21.0",
+    "typescript": "^6.0.3"
+  }
 }
