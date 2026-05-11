@@ -5,6 +5,7 @@ import OllamaAPI, {
 import { loadFile } from "./utils.js";
 import { Character } from "./types.js";
 import { select } from "@inquirer/prompts";
+import ora from "ora";
 
 // Character conversation class
 export class CharacterConversation {
@@ -49,11 +50,19 @@ export class CharacterConversation {
       this.playerPrompt;
 
     // Initialize chat with context
-    const result = await this.ollama.sendConversation(
-      this.conversationHistory,
-      conversationPrompt +
-        " For this first message, please respond as if I, the detective, have just walked up and greeted you.",
-    );
+    const spinner = ora(`${this.character.name} is thinking...`).start();
+    let result;
+    try {
+      result = await this.ollama.sendConversation(
+        this.conversationHistory,
+        conversationPrompt +
+          " For this first message, please respond as if I, the detective, have just walked up and greeted you.",
+      );
+      spinner.stop();
+    } catch (error) {
+      spinner.fail("Failed to get response");
+      throw error;
+    }
 
     // Add assistant response to conversation history
     this.conversationHistory.push({
@@ -93,6 +102,7 @@ export class CharacterConversation {
   }
 
   private async handleUserInput(userInput: string): Promise<string[] | null> {
+    const spinner = ora(`${this.character.name} is thinking...`).start();
     try {
       // Add user message to conversation history
       this.conversationHistory.push({ role: "user", content: userInput });
@@ -102,6 +112,8 @@ export class CharacterConversation {
         this.conversationHistory,
         this.systemPrompt,
       );
+
+      spinner.stop();
 
       // Add assistant response to conversation history
       this.conversationHistory.push({
@@ -113,6 +125,7 @@ export class CharacterConversation {
 
       return result.prompts;
     } catch (error) {
+      spinner.fail("Error getting response");
       console.error("Error getting response:", (error as Error).message);
       console.log("Please check that Ollama is running and try again.");
       return null;
