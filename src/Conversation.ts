@@ -1,10 +1,10 @@
-import * as readline from "readline";
 import OllamaAPI, {
   type OllamaMessage,
   type CustomOllamaResponse,
 } from "./ai/Ollama.js";
 import { loadFile } from "./utils.js";
 import { Character } from "./types.js";
+import { select } from "@inquirer/prompts";
 
 // Character conversation class
 export class CharacterConversation {
@@ -54,35 +54,45 @@ export class CharacterConversation {
       conversationPrompt +
         " For this first message, please respond as if I, the detective, have just walked up and greeted you.",
     );
+
     // Add assistant response to conversation history
     this.conversationHistory.push({
       role: "assistant",
       content: result.response,
     });
+
     // Display response
     console.log(`\n${this.character.name}: ${result.response}`);
 
-    const askQuestion = (): void => {
-      // this.rl.question("\nYou: ", (userInput: string) => {
-      //   if (
-      //     userInput.toLowerCase() === "quit" ||
-      //     userInput.toLowerCase() === "exit"
-      //   ) {
-      //     console.log(`\n${this.character.name}: Goodbye, detective.`);
-      //     return;
-      //   }
-      //   // Handle async operation in a separate function
-      //   this.handleUserInput(userInput, askQuestion);
-      // });
-    };
+    // Main conversation loop — driven by suggested prompts
+    let currentPrompts = result.prompts;
 
-    askQuestion();
+    while (true) {
+      const choices = [
+        ...currentPrompts.map((prompt) => ({ name: prompt, value: prompt })),
+        { name: "❌ End conversation", value: "__exit__" },
+      ];
+
+      const selected = await select({
+        message: "What do you ask?",
+        choices,
+      });
+
+      if (selected === "__exit__") {
+        console.log(`\n${this.character.name}: Goodbye, detective.`);
+        return;
+      }
+
+      const next = await this.handleUserInput(selected);
+      if (!next) {
+        // Error path — bail out of the loop
+        return;
+      }
+      currentPrompts = next;
+    }
   }
 
-  private async handleUserInput(
-    userInput: string,
-    askQuestion: () => void,
-  ): Promise<void> {
+  private async handleUserInput(userInput: string): Promise<string[] | null> {
     try {
       // Add user message to conversation history
       this.conversationHistory.push({ role: "user", content: userInput });
@@ -101,11 +111,11 @@ export class CharacterConversation {
 
       console.log(`\n${this.character.name}: ${result.response}`);
 
-      // Continue the conversation
-      askQuestion();
+      return result.prompts;
     } catch (error) {
       console.error("Error getting response:", (error as Error).message);
       console.log("Please check that Ollama is running and try again.");
+      return null;
     }
   }
 }
