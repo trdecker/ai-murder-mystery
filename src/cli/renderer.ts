@@ -24,16 +24,19 @@ export interface Choice<T> {
 
 export interface RendererOptions {
   animate?: boolean;
+  isDebug?: boolean;
   typeSpeedMs?: number;
 }
 
 export class Renderer {
   private readonly animate: boolean;
+  private readonly isDebug: boolean;
   private readonly typeSpeedMs: number;
 
-  constructor(options: RendererOptions = {}) {
-    this.animate = options.animate ?? true;
-    this.typeSpeedMs = options.typeSpeedMs ?? 12;
+  constructor({ animate, isDebug, typeSpeedMs }: RendererOptions = {}) {
+    this.isDebug = isDebug ?? false;
+    this.animate = animate ?? true;
+    this.typeSpeedMs = typeSpeedMs ?? 12;
   }
 
   // #####  Output primitives  #####
@@ -74,9 +77,9 @@ export class Renderer {
     this.blank();
   }
 
-  /** A neutral system/meta message. */
-  system(text: string): void {
-    console.log(style.yellow(text));
+  /** Debug message */
+  debug(text: string): void {
+    if (this.isDebug) console.log(style.yellow(text));
   }
 
   /** A recoverable, user-facing error (fatal ones still go through the logger). */

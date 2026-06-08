@@ -6,17 +6,12 @@ export interface QuestionExchange {
 
 export type Mood = "cooperative" | "defensive" | "hostile";
 
-/** Everything about ONE character that changes during a single playthrough. */
 export interface CharacterState {
-  exchanges: QuestionExchange[]; // this character's Q&A transcript
+  exchanges: QuestionExchange[];
 }
 
 export interface GameStateData {
   characters: Record<string, CharacterState>;
-}
-
-function clamp(n: number, min = 0, max = 100): number {
-  return Math.max(min, Math.min(max, n));
 }
 
 // #####  State container  #####

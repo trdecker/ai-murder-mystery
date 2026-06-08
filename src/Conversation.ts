@@ -71,11 +71,6 @@ export class CharacterConversation {
     }
   }
 
-  /**
-   * One exchange: record the detective's line, call the model behind a spinner,
-   * render the reply, and (optionally) log the Q&A into shared state. Returns
-   * the parsed reply, or null if the call failed (the error is already shown).
-   */
   private async ask(
     detectiveLine: string,
     { record }: { record: boolean },
@@ -101,7 +96,6 @@ export class CharacterConversation {
     await this.renderer.speech(this.character.name, reply.response);
 
     if (record) {
-      // Suspicion scoring is a future hook — pass a delta here once you derive one.
       this.state.recordQuestioning(
         this.character.id,
         detectiveLine,
