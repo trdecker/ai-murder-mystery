@@ -1,7 +1,7 @@
 {
   "name": "ai-murder-mystery",
   "version": "1.0.0",
-  "main": "dist/Main.js",
+  "main": "dist/main.js",
   "dependencies": {
     "@anthropic-ai/sdk": "^0.95.1",
     "@types/inquirer": "^9.0.9",

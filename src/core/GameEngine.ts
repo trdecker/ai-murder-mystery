@@ -1,10 +1,10 @@
 import { readFile } from "fs/promises";
-import { CharacterConversation } from "../Conversation.js";
+import { CharacterConversation } from "./conversation.js";
 import type { Screens, MainMenuChoice } from "../cli/screens.js";
 import type { Character } from "../types.js";
 import type { LlmClient } from "../ai/llmClient.js";
 import type { Renderer } from "../cli/renderer.js";
-import type { GameState } from "./GameState.js";
+import type { GameState } from "./gameState.js";
 
 export interface GameConfig {
   isDebug?: boolean;

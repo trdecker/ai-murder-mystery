@@ -1,8 +1,8 @@
 import dotenv from "dotenv";
-import { GameEngine } from "./core/GameEngine.js";
-import { GameState } from "./core/GameState.js";
+import { GameEngine } from "./core/gameEngine.js";
+import { GameState } from "./core/gameState.js";
 import { Renderer } from "./cli/renderer.js";
-import { OllamaClient } from "./ai/Ollama.js";
+import { OllamaClient } from "./ai/ollama.js";
 import { Screens } from "./cli/screens.js";
 
 dotenv.config();

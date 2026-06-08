@@ -1,9 +1,9 @@
-import { loadFile } from "./utils.js";
-import type { LlmClient, ChatMessage } from "./ai/llmClient.js";
-import { askCharacter, type CharacterReply } from "./ai/promptBuilder.js";
-import type { Character } from "./types.js";
-import type { Screens } from "./cli/screens.js";
-import type { GameState } from "./core/GameState.js";
+import { loadFile } from "../utils.js";
+import type { LlmClient, ChatMessage } from "../ai/llmClient.js";
+import { askCharacter, type CharacterReply } from "../ai/promptBuilder.js";
+import type { Character } from "../types.js";
+import type { Screens } from "../cli/screens.js";
+import type { GameState } from "./gameState.js";
 
 export interface CharacterConversationConfig {
   character: Character;
