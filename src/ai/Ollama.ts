@@ -1,154 +1,125 @@
-import dotenv from "dotenv";
+import { LlmClient, ChatMessage, ChatOptions, LlmError } from "./llmClient.js";
 
-dotenv.config();
-
-interface OllamaMessage {
-  role: "user" | "assistant";
-  content: string;
+export interface OllamaConfig {
+  baseUrl?: string;
+  model?: string;
 }
 
-interface OllamaGenerateRequest {
-  model: string;
-  prompt: string;
-  stream: boolean;
-  format?: "json";
-}
-
-interface OllamaGenerateResponse {
-  response: string;
+interface OllamaChatResponse {
+  message?: { role: string; content: string };
   done: boolean;
-  context?: number[];
-  total_duration?: number;
-  load_duration?: number;
-  prompt_eval_count?: number;
-  prompt_eval_duration?: number;
-  eval_count?: number;
-  eval_duration?: number;
 }
 
-interface CustomOllamaResponse {
-  response: string;
-  prompts: string[];
-}
+export class OllamaClient implements LlmClient {
+  private readonly baseUrl: string;
+  private readonly model: string;
 
-// What we ask the model to return on every turn.
-const STRUCTURED_OUTPUT_INSTRUCTION = `
-You must respond with a JSON object in exactly this format, and nothing else:
-{
-  "response": "<your in-character reply to the detective>",
-  "prompts": ["<follow-up question 1>", "<follow-up question 2>", "<follow-up question 3>"]
-}
-
-The "prompts" array should contain 3 to 5 short, distinct follow-up questions or statements the detective could plausibly say next. Each prompt should be a single sentence, written from the detective's first-person perspective (e.g. "Where were you that night?"). Do not number them. Do not include any text outside the JSON object.
-`.trim();
-
-class OllamaAPI {
-  private baseUrl: string;
-  private model: string;
-
-  constructor() {
-    this.baseUrl = process.env.OLLAMA_BASE_URL || "http://localhost:11434";
-    this.model = process.env.OLLAMA_MODEL || "llama2";
-  }
-
-  private async generate(prompt: string): Promise<string> {
-    const response = await fetch(`${this.baseUrl}/api/generate`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: this.model,
-        prompt,
-        stream: false,
-        format: "json",
-      } as OllamaGenerateRequest),
-    });
-
-    if (!response.ok) {
-      throw new Error(
-        `Ollama API error: ${response.status} ${response.statusText}`,
-      );
-    }
-
-    const data: OllamaGenerateResponse = await response.json();
-    return data.response;
-  }
-
-  private parseStructuredResponse(raw: string): CustomOllamaResponse {
-    // Strip code fences if the model added them despite format: "json".
-    const cleaned = raw.replace(/```json|```/g, "").trim();
-    try {
-      const parsed = JSON.parse(cleaned);
-      const response =
-        typeof parsed.response === "string" ? parsed.response : "";
-      const prompts = Array.isArray(parsed.prompts)
-        ? parsed.prompts.filter(
-            (p: unknown): p is string => typeof p === "string",
-          )
-        : [];
-      return { response, prompts };
-    } catch {
-      // Fallback: model didn't return valid JSON. Show the raw text and
-      // offer a generic continuation so the player isn't stuck.
-      return {
-        response: cleaned,
-        prompts: ["Tell me more.", "What happened next?", "Why?"],
-      };
-    }
+  // Config is injected (with env fallbacks) rather than read straight from the
+  // environment inside the class — easier to test and to point at another
+  // server. Call dotenv.config() ONCE in Main (it's a startup concern), or load
+  // config there and pass it in, instead of as an import side-effect here.
+  constructor(config: OllamaConfig = {}) {
+    this.baseUrl =
+      config.baseUrl ?? process.env.OLLAMA_BASE_URL ?? "http://localhost:11434";
+    this.model = config.model ?? process.env.OLLAMA_MODEL ?? "llama3.2";
   }
 
   async sendMessage(
-    message: string,
-    systemPrompt?: string,
-  ): Promise<CustomOllamaResponse> {
-    try {
-      const prompt =
-        (systemPrompt ? `${systemPrompt}\n\n` : "") +
-        `${STRUCTURED_OUTPUT_INSTRUCTION}\n\n` +
-        `User: ${message}\nAssistant:`;
+    messages: ChatMessage[],
+    options: ChatOptions = {},
+  ): Promise<string> {
+    const body = {
+      model: options.model ?? this.model,
+      messages, // /api/chat takes roles natively — no manual "User:/Assistant:" flattening
+      stream: Boolean(options.onToken),
+      ...(options.json ? { format: "json" as const } : {}),
+      options: {
+        ...(options.temperature !== undefined
+          ? { temperature: options.temperature }
+          : {}),
+        ...(options.stop ? { stop: options.stop } : {}),
+      },
+    };
 
-      const raw = await this.generate(prompt);
-      return this.parseStructuredResponse(raw);
-    } catch (error) {
-      console.error(
-        "Error sending message to Ollama:",
-        (error as Error).message,
+    let response: Response;
+    try {
+      response = await fetch(`${this.baseUrl}/api/chat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+        signal: options.signal,
+      });
+    } catch (cause) {
+      // Network-level failure (server down, DNS, aborted) -> the contract's error.
+      throw new LlmError(
+        `Could not reach Ollama at ${this.baseUrl}. Is it running? (try \`ollama serve\`)`,
+        cause,
       );
-      throw error;
+    }
+
+    if (!response.ok) {
+      throw new LlmError(
+        `Ollama returned ${response.status} ${response.statusText}.`,
+      );
+    }
+
+    return options.onToken
+      ? this.readStream(response, options.onToken)
+      : this.readSingle(response);
+  }
+
+  // Optional readiness check from the port — ping the server before we start.
+  async isReachable(): Promise<boolean> {
+    try {
+      const res = await fetch(`${this.baseUrl}/api/tags`);
+      return res.ok;
+    } catch {
+      return false;
     }
   }
 
-  async sendConversation(
-    messages: OllamaMessage[],
-    systemPrompt?: string,
-  ): Promise<CustomOllamaResponse> {
-    try {
-      let prompt = "";
+  private async readSingle(response: Response): Promise<string> {
+    const data = (await response.json()) as OllamaChatResponse;
+    return data.message?.content ?? "";
+  }
 
-      if (systemPrompt) {
-        prompt += `${systemPrompt}\n\n`;
-      }
-      prompt += `${STRUCTURED_OUTPUT_INSTRUCTION}\n\n`;
-
-      messages.forEach((msg) => {
-        if (msg.role === "user") {
-          prompt += `User: ${msg.content}\n`;
-        } else if (msg.role === "assistant") {
-          prompt += `Assistant: ${msg.content}\n`;
-        }
-      });
-      prompt += "Assistant:";
-
-      const raw = await this.generate(prompt);
-      return this.parseStructuredResponse(raw);
-    } catch (error) {
-      console.error(
-        "Error sending conversation to Ollama:",
-        (error as Error).message,
-      );
-      throw error;
+  private async readStream(
+    response: Response,
+    onToken: (chunk: string) => void,
+  ): Promise<string> {
+    if (!response.body) {
+      throw new LlmError("Ollama returned an empty streaming body.");
     }
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let full = "";
+
+    // Ollama streams newline-delimited JSON objects, one per token-ish chunk.
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+
+      let newline: number;
+      while ((newline = buffer.indexOf("\n")) !== -1) {
+        const line = buffer.slice(0, newline).trim();
+        buffer = buffer.slice(newline + 1);
+        if (!line) continue;
+
+        let chunk: OllamaChatResponse;
+        try {
+          chunk = JSON.parse(line);
+        } catch {
+          continue; // ignore a malformed/partial line
+        }
+        const piece = chunk.message?.content ?? "";
+        if (piece) {
+          full += piece;
+          onToken(piece);
+        }
+      }
+    }
+    return full;
   }
 }
-
-export default OllamaAPI;
-export type { OllamaMessage, CustomOllamaResponse };

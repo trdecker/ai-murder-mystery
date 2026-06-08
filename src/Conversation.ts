@@ -1,134 +1,114 @@
-import OllamaAPI, {
-  type OllamaMessage,
-  type CustomOllamaResponse,
-} from "./ai/Ollama.js";
 import { loadFile } from "./utils.js";
-import { Character } from "./types.js";
-import { select } from "@inquirer/prompts";
-import ora from "ora";
+import { LlmError, type LlmClient, type ChatMessage } from "./ai/llmClient.js";
+import { askCharacter, type CharacterReply } from "./ai/promptBuilder.js";
+import type { Character } from "./types.js";
+import type { Renderer, Choice } from "./cli/renderer.js";
+import type { GameState } from "./core/GameState.js";
 
-// Character conversation class
+export interface CharacterConversationConfig {
+  character: Character;
+  llmClient: LlmClient;
+  renderer: Renderer;
+  state: GameState;
+}
+
+// A framing beat that opens the scene so the character has something to react
+// to. Like the intro/ending copy, this could live in content rather than here.
+const OPENING_BEAT =
+  "(The detective walks up to your table and introduces himself.)";
+
+const EXIT = "__exit__";
+
 export class CharacterConversation {
-  private character: Character;
-  private characterPrompt: string;
-  private conversationHistory: OllamaMessage[];
-  private ollama: OllamaAPI;
-  private systemPrompt: string;
-  private playerPrompt: string;
+  private readonly character: Character;
+  private readonly llmClient: LlmClient;
+  private readonly renderer: Renderer;
+  private readonly state: GameState;
+  private readonly systemPrompt: string;
+  private readonly history: ChatMessage[] = [];
 
-  constructor(character: Character) {
-    // Initialize fields
+  constructor({
+    character,
+    llmClient,
+    renderer,
+    state,
+  }: CharacterConversationConfig) {
     this.character = character;
-    const characterPrompt = loadFile(character.file);
-    this.characterPrompt = characterPrompt;
-    this.conversationHistory = [];
-    this.systemPrompt = loadFile("AI_Instructions.txt");
-    this.playerPrompt = loadFile("Ricardo_Rivera.txt");
+    this.llmClient = llmClient;
+    this.renderer = renderer;
+    this.state = state;
 
-    // Start ollama
-    try {
-      this.ollama = new OllamaAPI();
-    } catch (error) {
-      console.error(
-        "Failed to initialize Ollama API:",
-        (error as Error).message,
-      );
-      throw new Error(
-        "Could not connect to Ollama service. Please ensure Ollama is running.",
-      );
-    }
+    // Assemble the persona/system prompt from content. The JSON reply-format
+    // instruction is NOT added here — askCharacter owns the reply schema.
+    this.systemPrompt = [
+      loadFile("AI_Instructions.txt"),
+      loadFile(this.character.file),
+      loadFile("Ricardo_Rivera.txt"),
+    ].join("\n\n");
   }
 
   async start(): Promise<void> {
-    console.log(`\nStarting conversation with ${this.character.name}...`);
+    // Opening line: seed the scene and let the character greet the detective.
+    const opener = await this.ask(OPENING_BEAT, { record: false });
+    if (!opener) return; // model unreachable — error already shown
 
-    const conversationPrompt =
-      this.systemPrompt +
-      "\n\n" +
-      this.characterPrompt +
-      "\n\n" +
-      this.playerPrompt;
+    let prompts = opener.prompts;
 
-    // Initialize chat with context
-    const spinner = ora(`${this.character.name} is thinking...`).start();
-    let result;
-    try {
-      result = await this.ollama.sendConversation(
-        this.conversationHistory,
-        conversationPrompt +
-          " For this first message, please respond as if I, the detective, have just walked up and greeted you.",
-      );
-      spinner.stop();
-    } catch (error) {
-      spinner.fail("Failed to get response");
-      throw error;
-    }
-
-    // Add assistant response to conversation history
-    this.conversationHistory.push({
-      role: "assistant",
-      content: result.response,
-    });
-
-    // Display response
-    console.log(`\n${this.character.name}: ${result.response}`);
-
-    // Main conversation loop — driven by suggested prompts
-    let currentPrompts = result.prompts;
-
+    // Turn loop, driven by the suggested follow-up questions.
     while (true) {
-      const choices = [
-        ...currentPrompts.map((prompt) => ({ name: prompt, value: prompt })),
-        { name: "❌ End conversation", value: "__exit__" },
+      const choices: Choice<string>[] = [
+        ...prompts.map((p) => ({ name: p, value: p })),
+        { name: "❌ End conversation", value: EXIT },
       ];
 
-      const selected = await select({
-        message: "What do you ask?",
-        choices,
-      });
+      const selected = await this.renderer.select("What do you ask?", choices);
+      if (selected === EXIT) return;
 
-      if (selected === "__exit__") {
-        console.log(`\n${this.character.name}: Goodbye, detective.`);
-        return;
-      }
+      const reply = await this.ask(selected, { record: true });
+      if (!reply) return; // error path — bail back to the menu
 
-      const next = await this.handleUserInput(selected);
-      if (!next) {
-        // Error path — bail out of the loop
-        return;
-      }
-      currentPrompts = next;
+      prompts = reply.prompts;
     }
   }
 
-  private async handleUserInput(userInput: string): Promise<string[] | null> {
-    const spinner = ora(`${this.character.name} is thinking...`).start();
+  /**
+   * One exchange: record the detective's line, call the model behind a spinner,
+   * render the reply, and (optionally) log the Q&A into shared state. Returns
+   * the parsed reply, or null if the call failed (the error is already shown).
+   */
+  private async ask(
+    detectiveLine: string,
+    { record }: { record: boolean },
+  ): Promise<CharacterReply | null> {
+    this.history.push({ role: "user", content: detectiveLine });
+
+    let reply: CharacterReply;
     try {
-      // Add user message to conversation history
-      this.conversationHistory.push({ role: "user", content: userInput });
-
-      // Get response from Ollama
-      const result = await this.ollama.sendConversation(
-        this.conversationHistory,
-        this.systemPrompt,
+      reply = await this.renderer.withSpinner(
+        `${this.character.name} is thinking...`,
+        () => askCharacter(this.llmClient, this.systemPrompt, this.history),
       );
-
-      spinner.stop();
-
-      // Add assistant response to conversation history
-      this.conversationHistory.push({
-        role: "assistant",
-        content: result.response,
-      });
-
-      console.log(`\n${this.character.name}: ${result.response}`);
-
-      return result.prompts;
     } catch (error) {
-      spinner.fail("Error getting response");
-      console.error("Error getting response:", (error as Error).message);
-      console.log("Please check that Ollama is running and try again.");
+      this.renderer.error(
+        error instanceof LlmError
+          ? error.message
+          : "Something went wrong talking to the model.",
+      );
       return null;
     }
+
+    this.history.push({ role: "assistant", content: reply.response });
+    await this.renderer.speech(this.character.name, reply.response);
+
+    if (record) {
+      // Suspicion scoring is a future hook — pass a delta here once you derive one.
+      this.state.recordQuestioning(
+        this.character.id,
+        detectiveLine,
+        reply.response,
+      );
+    }
+
+    return reply;
   }
 }

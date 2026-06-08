@@ -1,93 +1,63 @@
-export interface QuestioningRecord {
-  characterId: string;
-  questions: Array<{
-    question: string;
-    answer: string;
-    timestamp: number;
-    suspicionChange?: number;
-  }>;
+export interface QuestionExchange {
+  question: string;
+  answer: string;
+  timestamp: number;
+}
+
+export type Mood = "cooperative" | "defensive" | "hostile";
+
+/** Everything about ONE character that changes during a single playthrough. */
+export interface CharacterState {
+  exchanges: QuestionExchange[]; // this character's Q&A transcript
 }
 
 export interface GameStateData {
-  // Character tracking
-  charactersQuestioned: QuestioningRecord[];
-  suspicionLevels: Record<string, number>; // 0-100
-  characterMoods: Record<string, "cooperative" | "defensive" | "hostile">;
+  characters: Record<string, CharacterState>;
 }
+
+function clamp(n: number, min = 0, max = 100): number {
+  return Math.max(min, Math.min(max, n));
+}
+
+// #####  State container  #####
 
 export class GameState {
   private state: GameStateData;
   private listeners: Array<(state: GameStateData) => void> = [];
 
   constructor() {
-    this.state = {
-      charactersQuestioned: [],
-      suspicionLevels: {},
-      characterMoods: {},
-    };
+    this.state = { characters: {} };
+  }
+
+  /** Lazily create a character's state the first time we touch it. */
+  private ensureCharacter(characterId: string): CharacterState {
+    let cs = this.state.characters[characterId];
+    if (!cs) {
+      this.state.characters[characterId] = cs;
+    }
+    return cs;
   }
 
   // State getters
   getState(): Readonly<GameStateData> {
+    // NOTE: shallow copy — the nested `characters` object is still shared.
+    // If you need callers to be unable to mutate state, swap this for
+    // `structuredClone(this.state)` (costs a clone on every read/notify).
     return { ...this.state };
-  }
-
-  getSuspicionLevel(characterId: string): number {
-    return this.state.suspicionLevels[characterId] || 0;
-  }
-
-  hasQuestionedCharacter(characterId: string): boolean {
-    return this.state.charactersQuestioned.some(
-      (record) => record.characterId === characterId,
-    );
   }
 
   recordQuestioning(
     characterId: string,
     question: string,
     answer: string,
-    suspicionChange?: number,
   ): void {
-    let record = this.state.charactersQuestioned.find(
-      (r) => r.characterId === characterId,
-    );
+    const cs = this.ensureCharacter(characterId);
 
-    if (!record) {
-      record = { characterId, questions: [] };
-      this.state.charactersQuestioned.push(record);
-    }
-
-    record.questions.push({
+    cs.exchanges.push({
       question,
       answer,
       timestamp: Date.now(),
-      suspicionChange,
     });
-
-    // Update suspicion if provided
-    if (suspicionChange) {
-      this.adjustSuspicion(characterId, suspicionChange);
-    }
-
-    this.notifyListeners();
-  }
-
-  adjustSuspicion(characterId: string, change: number): void {
-    const current = this.state.suspicionLevels[characterId] || 0;
-    this.state.suspicionLevels[characterId] = Math.max(
-      0,
-      Math.min(100, current + change),
-    );
-
-    // Update character mood based on suspicion
-    const suspicion = this.state.suspicionLevels[characterId];
-    if (suspicion < 30) {
-      this.state.characterMoods[characterId] = "cooperative";
-    } else if (suspicion < 70) {
-      this.state.characterMoods[characterId] = "defensive";
-    } else {
-      this.state.characterMoods[characterId] = "hostile";
-    }
 
     this.notifyListeners();
   }
@@ -95,8 +65,6 @@ export class GameState {
   // Event system
   subscribe(listener: (state: GameStateData) => void): () => void {
     this.listeners.push(listener);
-
-    // Return unsubscribe function
     return () => {
       const index = this.listeners.indexOf(listener);
       if (index > -1) {
@@ -115,12 +83,17 @@ export class GameState {
   }
 
   load(data: string): void {
+    let parsed: unknown;
     try {
-      this.state = JSON.parse(data);
-      this.notifyListeners();
-    } catch (error) {
-      throw new Error("Failed to load game state: Invalid data format");
+      parsed = JSON.parse(data);
+    } catch {
+      throw new Error("Failed to load game state: Invalid JSON");
     }
+    if (!parsed || typeof parsed !== "object" || !("characters" in parsed)) {
+      throw new Error("Failed to load game state: Unexpected shape");
+    }
+    this.state = parsed as GameStateData;
+    this.notifyListeners();
   }
 }
 

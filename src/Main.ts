@@ -1,34 +1,35 @@
+import dotenv from "dotenv";
 import { GameEngine } from "./core/GameEngine.js";
 import { GameState } from "./core/GameState.js";
+import { Renderer } from "./cli/renderer.js";
+import { OllamaClient } from "./ai/Ollama.js";
+import { logger } from "./Logger.js";
+import { Screens } from "./cli/screens.js";
+
+dotenv.config(); // load env ONCE, here at the entry point (out of OllamaClient)
 
 async function runGame(): Promise<void> {
-  // console.clear();
-  // console.log("🕵️  AI MURDER MYSTERY\n");
-
-  // console.log(
-  //   "In the sleepy town of Tokeland, Washington, wealthy hotel owner Don Dahlgren was found dead in the FISHY FJORD, the local pub.\n",
-  // );
-
-  // console.log(
-  //   "You are the world renowned detective Ricardo Rivera. You must find the murderer!\n",
-  // );
-
-  // Check for --dev flag in command line arguments
   const isDebug = process.argv.includes("--dev");
 
+  const renderer = new Renderer({ animate: !isDebug }); // skip the typewriter in dev
+  const screens = new Screens(renderer);
+  const llmClient = new OllamaClient();
   const state = new GameState();
 
-  // Initialize and start the game engine
   const gameEngine = new GameEngine({
-    state,
     isDebug,
+    renderer,
+    screens,
+    llmClient,
+    state,
   });
 
   await gameEngine.initialize();
-  await gameEngine.runMainMenu();
+  await gameEngine.start();
 }
 
+// Single top-level error boundary; HOW the error surfaces goes through the logger.
 runGame().catch((error) => {
-  console.error("💥 Unexpected error:", error);
+  logger.error("Fatal error during startup", error);
   process.exit(1);
 });

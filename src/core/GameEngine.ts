@@ -1,101 +1,116 @@
-import { Character } from "../types.js";
-import { CharacterConversation } from "../Conversation.js";
-import { GameState } from "./GameState.js";
 import { readFile } from "fs/promises";
+import { CharacterConversation } from "../Conversation.js";
+import { logger } from "../Logger.js";
+import type { Screens, MainMenuChoice } from "../cli/screens.js";
+import type { Character } from "../types.js";
+import type { LlmClient } from "../ai/llmClient.js";
+import type { Renderer } from "../cli/renderer.js";
+import type { GameState } from "./GameState.js";
 
 export interface GameConfig {
-  state: GameState;
   isDebug?: boolean;
+  renderer: Renderer; // held only to hand to conversations
+  screens: Screens; // the engine's own top-level UI
+  llmClient: LlmClient;
+  state: GameState;
 }
 
 export class GameEngine {
   private characters: Character[] = [];
   private currentConversation?: CharacterConversation;
+  private readonly renderer: Renderer;
+  private readonly screens: Screens;
+  private readonly llmClient: LlmClient;
   private readonly state: GameState;
-  private gameLoop?: NodeJS.Timeout;
-  public readonly isDebug?: boolean;
+  public readonly isDebug: boolean;
 
-  constructor({ state, isDebug = false }: GameConfig) {
+  constructor({
+    isDebug = false,
+    renderer,
+    screens,
+    llmClient,
+    state,
+  }: GameConfig) {
+    this.renderer = renderer;
+    this.screens = screens;
+    this.llmClient = llmClient;
     this.state = state;
     this.isDebug = isDebug;
   }
 
-  // Load the characters
   async initialize(): Promise<void> {
-    // console.log("🔍 AI Murder Mystery Game");
-    // console.log("═".repeat(50));
+    // Fail fast if the model server isn't up — clearer than dying mid-question.
+    if (this.llmClient.isReachable && !(await this.llmClient.isReachable())) {
+      throw new Error(
+        "Ollama isn't reachable. Start it with `ollama serve` and make sure your model is pulled.",
+      );
+    }
 
-    // Load the characters
+    // Loading data could later move to a ScenarioLoader; path should come from config.
     try {
-      const charactersData = await readFile("./data/characters.json", "utf-8");
-      this.characters = JSON.parse(charactersData);
-      // logger.debug(`✅ Loaded ${this.characters.length} characters`);
+      const raw = await readFile("./data/characters.json", "utf-8");
+      this.characters = JSON.parse(raw);
+      logger.debug(`Loaded ${this.characters.length} characters`);
     } catch (error) {
       throw new Error("Failed to load character data");
     }
   }
 
   async start(): Promise<void> {
-    // this.renderer.showIntro();
+    await this.screens.intro();
     await this.runMainMenu();
   }
 
-  async runMainMenu(): Promise<void> {
-    // Skip straight to Gerald Gottman conversation if debug mode
+  private async runMainMenu(): Promise<void> {
     if (this.isDebug) {
-      const geraldGottman = this.characters.find(
-        (c) => c.name === "Gerald Gottmann",
-      );
-
-      if (geraldGottman) {
-        // console.log("🔧 Debug mode: Starting conversation with Gerald Gottman");
-        await this.startConversation(geraldGottman);
-        this.quit();
-      } else {
-        // TODO: log error
+      // Match on a stable id, not a display-name string.
+      const gerald = this.characters.find((c) => c.id === "gerald_gottman");
+      if (gerald) {
+        await this.startConversation(gerald);
+        return this.quit();
       }
     }
 
-    // // Create menu choices - using string values for proper typing
-    // const choices = this.characters.map((character, index) => ({
-    //   name: `🕵️ Interrogate ${character.name}`,
-    //   value: `character_${index}`,
-    // }));
+    const choice: MainMenuChoice = await this.screens.mainMenu(this.characters);
 
-    // choices.push({
-    //   name: "❌ Quit Game",
-    //   value: "quit",
-    // });
+    if (choice === "quit") return this.quit();
+    if (choice === "accuse") return this.runAccusation();
 
-    // const action = await select({
-    //   message: "What would you like to do?",
-    //   choices,
-    // });
-
-    // if (action === "quit") {
-    //   this.quit();
-    //   return;
-    // }
-
-    // // Extract character index and get character
-    // const characterIndex = parseInt(action.replace("character_", ""));
-    // const character = this.characters[characterIndex];
-
-    // this.currentConversation = new CharacterConversation(character);
-
-    // Begin the conversation!
-    // await this.currentConversation.start();
-
-    // Return to main menu after conversation ends
-    await this.runMainMenu();
+    // Anything else is a Character to interrogate (TS narrows it here).
+    await this.startConversation(choice);
+    await this.runMainMenu(); // loop back (a while-loop reads cleaner over a long game)
   }
 
   private async startConversation(character: Character): Promise<void> {
-    this.currentConversation = new CharacterConversation(character);
+    // Hand the conversation its collaborators so it can talk to the model,
+    // render dialogue, and record questioning into shared state.
+    this.currentConversation = new CharacterConversation({
+      character,
+      llmClient: this.llmClient,
+      renderer: this.renderer,
+      state: this.state,
+    });
     await this.currentConversation.start();
   }
 
+  private async runAccusation(): Promise<void> {
+    const accused = await this.screens.accusation(this.characters);
+    if (!accused) return this.runMainMenu(); // backed out at the confirmation
+
+    // Adjudication is DETERMINISTIC — read from scenario data, never the LLM.
+    // Assumes each character record carries an `isGuilty` flag (scenario data).
+    const guilty = this.characters.find((c) => c.isGuilty);
+    const won = !!guilty && accused.id === guilty.id;
+
+    // TODO: persist the outcome once GameState has a recordAccusation()/phase:
+    //   this.state.recordAccusation(accused.id, won);
+
+    await this.screens.ending(won, guilty?.name ?? "the killer", accused.name);
+    this.quit();
+  }
+
   quit(): void {
+    this.screens.farewell();
     process.exit(0);
   }
 }

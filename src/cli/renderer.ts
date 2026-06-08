@@ -1,242 +1,135 @@
-import chalk from "chalk";
-import ora, { Ora } from "ora";
-import stripAnsi from "strip-ansi";
+import {
+  select as promptSelect,
+  input as promptInput,
+  confirm as promptConfirm,
+} from "@inquirer/prompts";
+import ora from "ora";
+
+const style = {
+  bold: (s: string) => `\x1b[1m${s}\x1b[0m`,
+  dim: (s: string) => `\x1b[2m${s}\x1b[0m`,
+  cyan: (s: string) => `\x1b[36m${s}\x1b[0m`,
+  yellow: (s: string) => `\x1b[33m${s}\x1b[0m`,
+  green: (s: string) => `\x1b[32m${s}\x1b[0m`,
+  red: (s: string) => `\x1b[31m${s}\x1b[0m`,
+};
+
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
+/** A selectable option: a display label and the value returned when chosen. */
+export interface Choice<T> {
+  name: string;
+  value: T;
+}
+
+export interface RendererOptions {
+  animate?: boolean;
+  typeSpeedMs?: number;
+}
 
 export class Renderer {
-  private spinner: Ora | null = null;
-  private typingSpeed: number = 30; // milliseconds per character
+  private readonly animate: boolean;
+  private readonly typeSpeedMs: number;
 
-  // Color scheme
-  private colors = {
-    primary: chalk.cyan,
-    secondary: chalk.yellow,
-    success: chalk.green,
-    error: chalk.red,
-    warning: chalk.magenta,
-    info: chalk.blue,
-    dim: chalk.gray,
-    highlight: chalk.bold.white,
-    npc: chalk.hex("#FFA500"), // Orange for NPC dialogue
-    player: chalk.hex("#87CEEB"), // Sky blue for player
-    system: chalk.dim.gray,
-    clue: chalk.bold.yellow,
-  };
-
-  // Typography
-  private styles = {
-    title: (text: string) => this.colors.primary.bold(text),
-    subtitle: (text: string) => this.colors.secondary(text),
-    header: (text: string) => chalk.bold.underline(text),
-    divider: () => this.colors.dim("═".repeat(50)),
-    bullet: (text: string) => `  ${this.colors.dim("•")} ${text}`,
-  };
-
-  // Main display methods
-  displayTitle(title: string, subtitle?: string): void {
-    console.clear();
-    console.log();
-    console.log(this.styles.divider());
-    console.log(this.center(this.styles.title(title)));
-    if (subtitle) {
-      console.log(this.center(this.styles.subtitle(subtitle)));
-    }
-    console.log(this.styles.divider());
-    console.log();
+  constructor(options: RendererOptions = {}) {
+    this.animate = options.animate ?? true;
+    this.typeSpeedMs = options.typeSpeedMs ?? 12;
   }
 
-  displayHeader(text: string): void {
-    console.log();
-    console.log(this.styles.header(text));
-    console.log();
-  }
+  // #####  Output primitives  #####
 
-  displaySection(title: string, content: string[]): void {
-    console.log();
-    console.log(this.colors.highlight(title));
-    content.forEach((line) => console.log(this.styles.bullet(line)));
-    console.log();
-  }
-
-  // Character dialogue
-  displayCharacterDialogue(name: string, text: string): void {
-    const formattedName = this.colors.npc(`[${name}]:`);
-    console.log(`\n${formattedName} ${text}`);
-  }
-
-  displayPlayerDialogue(text: string): void {
-    const formattedName = this.colors.player("[You]:");
-    console.log(`\n${formattedName} ${text}`);
-  }
-
-  // Narrative text with optional typing effect
-  async displayNarrative(
-    text: string,
-    useTypingEffect: boolean = false,
-  ): Promise<void> {
-    console.log();
-    if (useTypingEffect) {
-      await this.typeWriter(this.colors.dim(text));
-    } else {
-      console.log(this.colors.dim(text));
-    }
-    console.log();
-  }
-
-  // System messages
-  displayInfo(message: string): void {
-    console.log(this.colors.info(`ℹ ${message}`));
-  }
-
-  displaySuccess(message: string): void {
-    console.log(this.colors.success(`✓ ${message}`));
-  }
-
-  displayError(message: string): void {
-    console.log(this.colors.error(`✗ ${message}`));
-  }
-
-  displayWarning(message: string): void {
-    console.log(this.colors.warning(`⚠ ${message}`));
-  }
-
-  displayDebug(message: string): void {
-    if (process.env.DEBUG || process.argv.includes("--dev")) {
-      console.log(this.colors.system(`[DEBUG] ${message}`));
-    }
-  }
-
-  // Clue discovery
-  displayClueDiscovered(clue: string): void {
-    console.log();
-    console.log(this.colors.clue("🔍 New Clue Discovered!"));
-    console.log(this.colors.clue(`   "${clue}"`));
-    console.log();
-  }
-
-  // Menu display
-  displayMenu(title: string, options: string[]): void {
-    console.log();
-    console.log(this.colors.highlight(title));
-    options.forEach((option, index) => {
-      const number = this.colors.primary(`[${index + 1}]`);
-      console.log(`  ${number} ${option}`);
-    });
-    console.log();
-  }
-
-  // Character list
-  displayCharacterList(
-    characters: Array<{
-      name: string;
-      occupation: string;
-      description?: string;
-    }>,
-  ): void {
-    console.log();
-    characters.forEach((char, index) => {
-      const number = this.colors.primary(`[${index + 1}]`);
-      const name = this.colors.highlight(char.name);
-      const occupation = this.colors.dim(`(${char.occupation})`);
-      if (char.description) {
-        console.log(`      ${this.colors.dim(char.description)}`);
-      }
-    });
-    console.log();
-  }
-
-  // Loading spinner methods
-  startSpinner(text: string): void {
-    this.spinner = ora({
-      text,
-      color: "cyan",
-      spinner: "dots",
-    }).start();
-  }
-
-  updateSpinner(text: string): void {
-    if (this.spinner) {
-      this.spinner.text = text;
-    }
-  }
-
-  succeedSpinner(text?: string): void {
-    if (this.spinner) {
-      this.spinner.succeed(text);
-      this.spinner = null;
-    }
-  }
-
-  failSpinner(text?: string): void {
-    if (this.spinner) {
-      this.spinner.fail(text);
-      this.spinner = null;
-    }
-  }
-
-  stopSpinner(): void {
-    if (this.spinner) {
-      this.spinner.stop();
-      this.spinner = null;
-    }
-  }
-
-  // Typing effect for dramatic moments
-  async typeWriter(text: string, speed?: number): Promise<void> {
-    const delay = speed || this.typingSpeed;
-    for (const char of text) {
-      process.stdout.write(char);
-      await this.sleep(delay);
-    }
-    console.log();
-  }
-
-  // Conversation history
-  displayConversationHistory(
-    history: Array<{ role: string; content: string }>,
-  ): void {
-    console.log();
-    console.log(this.styles.header("Conversation History"));
-    history.forEach((entry) => {
-      if (entry.role === "user") {
-        console.log(this.colors.player(`[You]: ${entry.content}`));
-      } else {
-        console.log(this.colors.npc(`[NPC]: ${entry.content}`));
-      }
-    });
-    console.log();
-  }
-
-  // Utility methods
-  private center(text: string, width: number = 50): string {
-    const textLength = stripAnsi(text).length;
-    const padding = Math.max(0, Math.floor((width - textLength) / 2));
-    return " ".repeat(padding) + text;
-  }
-
-  private sleep(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms));
-  }
-
-  // Clear screen
   clear(): void {
     console.clear();
   }
 
-  // Raw output (for when you need unformatted text)
-  raw(text: string): void {
-    console.log(text);
-  }
-
-  // Line break
-  lineBreak(): void {
+  blank(): void {
     console.log();
   }
 
-  // Divider line
-  divider(): void {
-    console.log(this.styles.divider());
+  /** A horizontal rule. Decoration, not copy. */
+  rule(width = 50): void {
+    console.log(style.dim("─".repeat(width)));
+  }
+
+  /** A bold banner/heading. Text supplied by the caller. */
+  heading(text: string): void {
+    console.log(style.bold(text));
+  }
+
+  /** A plain line, printed instantly. */
+  line(text: string): void {
+    console.log(text);
+  }
+
+  /** Scene-setting narration: dimmed, with the typewriter effect. */
+  async narrate(text: string): Promise<void> {
+    await this.type(text, style.dim);
+    this.blank();
+  }
+
+  /** A character speaking: highlighted name, then typed dialogue. */
+  async speech(name: string, text: string): Promise<void> {
+    process.stdout.write(style.cyan(style.bold(`${name}: `)));
+    await this.type(text);
+    this.blank();
+  }
+
+  /** A neutral system/meta message. */
+  system(text: string): void {
+    console.log(style.yellow(text));
+  }
+
+  /** A recoverable, user-facing error (fatal ones still go through the logger). */
+  error(text: string): void {
+    console.log(style.red(`⚠️  ${text}`));
+  }
+
+  // #####  Input primitives  #####
+
+  select<T>(message: string, choices: Choice<T>[]): Promise<T> {
+    return promptSelect<T>({ message, choices });
+  }
+
+  /** Free-text input, trimmed. The caller interprets "" however it likes. */
+  async input(message: string): Promise<string> {
+    const answer = await promptInput({ message });
+    return answer.trim();
+  }
+
+  confirm(message: string, defaultValue = false): Promise<boolean> {
+    return promptConfirm({ message, default: defaultValue });
+  }
+
+  // #####  Async feedback  #####
+
+  /** Run an async task behind a spinner. Stops on success, fails (and rethrows) on error. */
+  async withSpinner<T>(label: string, task: () => Promise<T>): Promise<T> {
+    const spinner = ora(label).start();
+    try {
+      const result = await task();
+      spinner.stop();
+      return result;
+    } catch (error) {
+      spinner.fail();
+      throw error;
+    }
+  }
+
+  // #####  Internals  #####
+
+  /** Typewriter print; styling applied per-character so escapes aren't split. */
+  private async type(
+    text: string,
+    color: (s: string) => string = (s) => s,
+  ): Promise<void> {
+    if (!this.animate) {
+      console.log(color(text));
+      return;
+    }
+    for (const char of text) {
+      process.stdout.write(color(char));
+      await sleep(this.typeSpeedMs);
+    }
+    process.stdout.write("\n");
   }
 }
-
-// Export a singleton instance for convenience
-export const renderer = new Renderer();

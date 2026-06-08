@@ -21,4 +21,5 @@ export interface Character {
   };
   id: string;
   file: string;
+  isGuilty?: boolean;
 }
