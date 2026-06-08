@@ -42,6 +42,21 @@ export class GameEngine {
   }
 
   async showMainMenu(): Promise<void> {
+    // Skip straight to Gerald Gottman conversation if debug mode
+    if (this.isDebug) {
+      const geraldGottman = this.characters.find(
+        c => c.name === "Gerald Gotmann"
+      );
+
+      if (geraldGottman) {
+        console.log("🔧 Debug mode: Starting conversation with Gerald Gottman");
+        this.currentConversation = new CharacterConversation(geraldGottman);
+        await this.currentConversation.start();
+        this.quit();
+        return;
+      }
+    }
+
     // Create menu choices - using string values for proper typing
     const choices = this.characters.map((character, index) => ({
       name: `🕵️ Interrogate ${character.name}`,
