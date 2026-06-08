@@ -31,7 +31,7 @@
   "homepage": "https://github.com/trdecker/ai-murder-mystery#readme",
   "description": "",
   "devDependencies": {
-    "@types/node": "^25.6.2",
+    "@types/node": "^25.9.2",
     "tsx": "^4.21.0",
     "typescript": "^6.0.3"
   }
