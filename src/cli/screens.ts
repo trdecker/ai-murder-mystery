@@ -1,11 +1,18 @@
 import type { Renderer, Choice } from "./renderer.js";
 import type { Character } from "../types.js";
+import { LlmError } from "../ai/llmClient.js";
 import { copy } from "../content/copy.js";
 
 export type MainMenuChoice = Character | "accuse" | "quit";
 
+// How the question menu encodes "leave the conversation" — a UI detail, so it
+// lives here, not in Conversation.
+const EXIT = "__exit__";
+
 export class Screens {
   constructor(private readonly r: Renderer) {}
+
+  // #####  Title / menu / accusation / ending  #####
 
   async intro(): Promise<void> {
     this.r.clear();
@@ -51,5 +58,33 @@ export class Screens {
   farewell(): void {
     this.r.blank();
     this.r.line(copy.farewell);
+  }
+
+  // #####  Conversation  #####
+
+  async askQuestion(prompts: string[]): Promise<string | null> {
+    const choices: Choice<string>[] = [
+      ...prompts.map((p) => ({ name: p, value: p })),
+      { name: copy.endConversation, value: EXIT },
+    ];
+    const selected = await this.r.select(copy.questionPrompt, choices);
+    return selected === EXIT ? null : selected;
+  }
+
+  characterIsThinking<T>(
+    characterName: string,
+    task: () => Promise<T>,
+  ): Promise<T> {
+    return this.r.withSpinner(copy.thinking(characterName), task);
+  }
+
+  characterSays(characterName: string, text: string): Promise<void> {
+    return this.r.speech(characterName, text);
+  }
+
+  llmModelError(error: unknown): void {
+    this.r.error(
+      error instanceof LlmError ? error.message : copy.modelErrorFallback,
+    );
   }
 }

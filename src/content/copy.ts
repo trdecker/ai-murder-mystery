@@ -20,4 +20,10 @@ export const copy = {
     `Wrong. You accused ${accused}, but ${guilty} was the killer. They walk free.`,
 
   farewell: "Thanks for playing. 🕵️",
+
+  // conversation
+  questionPrompt: "What do you ask?",
+  endConversation: "❌ End conversation",
+  thinking: (name: string) => `${name} is thinking...`,
+  modelErrorFallback: "Something went wrong talking to the model.",
 };

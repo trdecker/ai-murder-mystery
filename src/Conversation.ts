@@ -1,28 +1,24 @@
 import { loadFile } from "./utils.js";
-import { LlmError, type LlmClient, type ChatMessage } from "./ai/llmClient.js";
+import type { LlmClient, ChatMessage } from "./ai/llmClient.js";
 import { askCharacter, type CharacterReply } from "./ai/promptBuilder.js";
 import type { Character } from "./types.js";
-import type { Renderer, Choice } from "./cli/renderer.js";
+import type { Screens } from "./cli/screens.js";
 import type { GameState } from "./core/GameState.js";
 
 export interface CharacterConversationConfig {
   character: Character;
   llmClient: LlmClient;
-  renderer: Renderer;
+  screens: Screens;
   state: GameState;
 }
 
-// A framing beat that opens the scene so the character has something to react
-// to. Like the intro/ending copy, this could live in content rather than here.
 const OPENING_BEAT =
   "(The detective walks up to your table and introduces himself.)";
-
-const EXIT = "__exit__";
 
 export class CharacterConversation {
   private readonly character: Character;
   private readonly llmClient: LlmClient;
-  private readonly renderer: Renderer;
+  private readonly screens: Screens;
   private readonly state: GameState;
   private readonly systemPrompt: string;
   private readonly history: ChatMessage[] = [];
@@ -30,12 +26,12 @@ export class CharacterConversation {
   constructor({
     character,
     llmClient,
-    renderer,
+    screens,
     state,
   }: CharacterConversationConfig) {
     this.character = character;
     this.llmClient = llmClient;
-    this.renderer = renderer;
+    this.screens = screens;
     this.state = state;
 
     // Assemble the persona/system prompt from content. The JSON reply-format
@@ -54,18 +50,12 @@ export class CharacterConversation {
 
     let prompts = opener.prompts;
 
-    // Turn loop, driven by the suggested follow-up questions.
     while (true) {
-      const choices: Choice<string>[] = [
-        ...prompts.map((p) => ({ name: p, value: p })),
-        { name: "❌ End conversation", value: EXIT },
-      ];
+      const question = await this.screens.askQuestion(prompts);
+      if (question === null) return; // player ended the conversation
 
-      const selected = await this.renderer.select("What do you ask?", choices);
-      if (selected === EXIT) return;
-
-      const reply = await this.ask(selected, { record: true });
-      if (!reply) return; // error path — bail back to the menu
+      const reply = await this.ask(question, { record: true });
+      if (!reply) return; // Model error; already shown
 
       prompts = reply.prompts;
     }
@@ -79,21 +69,16 @@ export class CharacterConversation {
 
     let reply: CharacterReply;
     try {
-      reply = await this.renderer.withSpinner(
-        `${this.character.name} is thinking...`,
-        () => askCharacter(this.llmClient, this.systemPrompt, this.history),
+      reply = await this.screens.characterIsThinking(this.character.name, () =>
+        askCharacter(this.llmClient, this.systemPrompt, this.history),
       );
     } catch (error) {
-      this.renderer.error(
-        error instanceof LlmError
-          ? error.message
-          : "Something went wrong talking to the model.",
-      );
+      this.screens.llmModelError(error);
       return null;
     }
 
     this.history.push({ role: "assistant", content: reply.response });
-    await this.renderer.speech(this.character.name, reply.response);
+    await this.screens.characterSays(this.character.name, reply.response);
 
     if (record) {
       this.state.recordQuestioning(
