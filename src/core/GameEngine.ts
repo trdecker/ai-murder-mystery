@@ -83,7 +83,7 @@ export class GameEngine {
     this.currentConversation = new CharacterConversation({
       character,
       llmClient: this.llmClient,
-      renderer: this.renderer,
+      screens: this.screens,
       state: this.state,
     });
     await this.currentConversation.start();
